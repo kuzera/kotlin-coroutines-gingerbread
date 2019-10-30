@@ -1,7 +1,8 @@
 package com.example.service.internal
 
 import com.github.kittinunf.fuel.Fuel
-import com.github.kittinunf.fuel.coroutines.awaitStringResponse
+import com.github.kittinunf.fuel.core.FuelManager
+import com.github.kittinunf.fuel.coroutines.awaitStringResponseResult
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
@@ -15,36 +16,10 @@ class ExternalServicesCaller(val restTemplate: RestTemplate,
     private val logger: Logger = LoggerFactory.getLogger("external")
     private val baseUrl = "http://localhost:8087/"
 
-//     fun clientCall(clientType: ClientType, methodName: MethodName, paramValue: String? = null): Any {
-//        val url = getUrl(methodName.name, paramValue)
-//        logger.debug("${clientType} call to ${url}")
-//
-//        return when(clientType) {
-//            ClientType.restTemplate -> restTemplateCall(url)
-//            ClientType.webClient -> webClientCall(url)
-//            ClientType.fuel -> fuelClientCall(url)
-//        }
-//    }
-//
-//    fun restTemplateCall(url: String): String {
-//        val responseEntity = restTemplate.getForEntity(url, String::class.java)
-//        return responseEntity.body.toString()
-//    }
-//
-//    suspend fun fuelClientCall(url: String): String {
-//        return Fuel.get(url).awaitStringResponse().third
-//    }
-
-//    fun webClientCall(url: String): Mono<String> {
-//        return webClient.get()
-//                .uri(url)
-//                .retrieve()
-//                .bodyToMono(String::class.java)
-//                .onErrorReturn("")
-//                .doOnSuccess { logger.debug("Response success for $url is $it") }
-//                .doOnError { logger.info("Response error for $url is $it") }
-//                .onErrorResume { _ -> Mono.just("")  }
-//    }
+    init {
+        FuelManager.instance.timeoutInMillisecond = 50
+        FuelManager.instance.timeoutReadInMillisecond = 80
+    }
 
     fun restTemplateCall(methodName: MethodName, paramValue: String? = null): String {
         val url = getUrl(methodName.name, paramValue)
@@ -56,29 +31,33 @@ class ExternalServicesCaller(val restTemplate: RestTemplate,
     suspend fun fuelClientCall(methodName: MethodName, paramValue: String? = null): String {
         val url = getUrl(methodName.name, paramValue)
         logger.debug("fuelClientCall to ${url}")
-        return Fuel.get(url).awaitStringResponse().third
+
+        val (_, _, result) = Fuel.get(url).awaitStringResponseResult()
+
+        return result.fold(
+                { success -> success },
+                { error -> logger.warn("Response error for $url: ${error.exception}")
+                           ""}
+        )
     }
 
     fun webClientCall(methodName: MethodName,
                       paramValue: String? = null): Mono<String?>? {
-        logger.debug("webclient for $methodName and $paramValue")
+        val url = getUrl(methodName.name, paramValue)
+        logger.debug("webClientCall to ${url}")
         return webClient.get()
-                .uri(getUrl(methodName.name, paramValue))
+                .uri(url)
                 .retrieve()
                 .bodyToMono(String::class.java)
                 .onErrorReturn("")
-                .doOnSuccess { logger.debug("Response success for $methodName and $paramValue is $it") }
-                .doOnError { logger.info("Response error for $methodName and $paramValue is $it") }
+//                .doOnSuccess { logger.debug("Response success for $methodName and $paramValue is $it") }
+                .doOnError { logger.warn("Response error for $methodName and $paramValue is $it") }
                 .onErrorResume { _ -> Mono.just("")  }
     }
 
     private fun getUrl(methodName: String, paramValue: String?): String
             = "${baseUrl}${methodName}" + if (paramValue != null) "?value=${paramValue}" else ""
 
-}
-
-enum class ClientType {
-    restTemplate, webClient, fuel
 }
 
 enum class MethodName {

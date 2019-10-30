@@ -32,9 +32,6 @@ class ServiceConfig {
     @Bean
     fun webClient(): WebClient = WebClientBuilder(50, 80)
             .build()
-
-    @Bean
-    fun httpClient11(): java.net.http.HttpClient = java.net.http.HttpClient.newBuilder().build()
 }
 
 class WebClientBuilder(private val connectionTimeout: Int, private val readTimeout: Int) {
