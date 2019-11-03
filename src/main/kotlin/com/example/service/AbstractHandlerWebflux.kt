@@ -13,7 +13,7 @@ abstract class AbstractHandlerWebflux(private val externalServicesCaller: Extern
     protected fun buyMissingIngredients(requiredIngredients: Set<Ingredient>, existingIngredients: Set<Ingredient>): Mono<Boolean>? {
         val ingredientsToBuy = requiredIngredients.minus(existingIngredients)
         return externalServicesCaller.webClientCall(MethodName.ingredients, ingredientsToBuy.joinToString(","))
-                ?.map { it == "ok" }
+                ?.map { if (it == "ok") true else throw RuntimeException("cannot get missing ingredients") }
     }
 
     protected fun heatButterWithHoney(): Mono<Boolean>? {

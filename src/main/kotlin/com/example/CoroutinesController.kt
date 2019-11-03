@@ -12,6 +12,7 @@ import org.springframework.stereotype.Controller
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.client.ResourceAccessException
 import reactor.core.publisher.Mono
+import java.lang.RuntimeException
 import java.net.SocketTimeoutException
 import java.util.concurrent.TimeoutException
 
@@ -42,7 +43,7 @@ class CoroutinesController(val handlerBlocking: HandlerBlocking,
 	@GetMapping("/webfluxReactiveCoroutines")
 	fun webfluxGingerbreadMono(): Mono<Gingerbread> = foodMakerWebclientCoroutines.prepareGingerbread(existingIngredients)
 
-	@ExceptionHandler(ResourceAccessException::class, SocketTimeoutException::class, TimeoutException::class)
+	@ExceptionHandler(ResourceAccessException::class, SocketTimeoutException::class, TimeoutException::class, RuntimeException::class)
 	@ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
 	fun handleException(ex: Throwable): Map<String, String> {
 		logger.warn("Got $ex")

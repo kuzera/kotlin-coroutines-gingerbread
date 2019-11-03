@@ -6,6 +6,7 @@ import com.github.kittinunf.fuel.coroutines.awaitStringResponseResult
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import org.springframework.web.client.ResourceAccessException
 import org.springframework.web.client.RestTemplate
 import org.springframework.web.reactive.function.client.WebClient
 import reactor.core.publisher.Mono
@@ -24,8 +25,12 @@ class ExternalServicesCaller(val restTemplate: RestTemplate,
     fun restTemplateCall(methodName: MethodName, paramValue: String? = null): String {
         val url = getUrl(methodName.name, paramValue)
         logger.debug("restTemplateCall to ${url}")
-        val responseEntity = restTemplate.getForEntity(url, String::class.java)
-        return responseEntity.body.toString()
+
+        return try {
+            restTemplate.getForEntity(url, String::class.java).body.toString()
+        } catch (ex: ResourceAccessException) {
+            ""
+        }
     }
 
     suspend fun fuelClientCall(methodName: MethodName, paramValue: String? = null): String {
@@ -36,7 +41,7 @@ class ExternalServicesCaller(val restTemplate: RestTemplate,
 
         return result.fold(
                 { success -> success },
-                { error -> logger.warn("Response error for $url: ${error.exception}")
+                { error -> logger.info("Response error for $url: ${error.exception}")
                            ""}
         )
     }
@@ -49,10 +54,9 @@ class ExternalServicesCaller(val restTemplate: RestTemplate,
                 .uri(url)
                 .retrieve()
                 .bodyToMono(String::class.java)
+                .doOnSuccess { logger.debug("Response success for $methodName and $paramValue is $it") }
+                .doOnError { logger.info("Response error for $methodName and $paramValue is $it") }
                 .onErrorReturn("")
-//                .doOnSuccess { logger.debug("Response success for $methodName and $paramValue is $it") }
-                .doOnError { logger.warn("Response error for $methodName and $paramValue is $it") }
-                .onErrorResume { _ -> Mono.just("")  }
     }
 
     private fun getUrl(methodName: String, paramValue: String?): String

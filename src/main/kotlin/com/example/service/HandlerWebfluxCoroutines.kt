@@ -14,9 +14,7 @@ class HandlerWebfluxCoroutines(externalServicesCaller: ExternalServicesCaller) :
 
     fun prepareGingerbread(existingIngredients: Set<Ingredient>): Mono<Gingerbread> {
         return mono {
-            buyMissingIngredients(requiredIngredients, existingIngredients)?.map { if (!it)
-                throw RuntimeException("cannot get missing ingredients")
-            }
+            buyMissingIngredients(requiredIngredients, existingIngredients)?.awaitFirstOrDefault(false)
 
             val oven = heatOven()
             val heat = heatButterWithHoney()
@@ -27,7 +25,7 @@ class HandlerWebfluxCoroutines(externalServicesCaller: ExternalServicesCaller) :
             val baked = bake(oven.awaitFirstOrDefault(false), mixedDoughWithButter, tray.awaitFirstOrDefault(false))
             val icing = prepareIcing().awaitFirstOrDefault(false)
 
-            Gingerbread(baked, icing == true)
+            Gingerbread(baked, icing)
         }
     }
 }
