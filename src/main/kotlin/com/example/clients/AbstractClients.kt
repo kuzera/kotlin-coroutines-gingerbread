@@ -1,7 +1,6 @@
-package com.example.service.internal
+package com.example.clients
 
 import com.github.kittinunf.fuel.Fuel
-import com.github.kittinunf.fuel.core.FuelManager
 import com.github.kittinunf.fuel.coroutines.awaitStringResponseResult
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -11,18 +10,30 @@ import org.springframework.web.client.RestTemplate
 import org.springframework.web.reactive.function.client.WebClient
 import reactor.core.publisher.Mono
 
+enum class MethodName {
+    ingredients, heat, dough, tray, icing
+}
+
+interface AbstractClient {
+    val logger: Logger
+        get() = LoggerFactory.getLogger("external")
+    val baseUrl: String
+        get() = "http://localhost:8087/"
+
+    fun getUrl(methodName: String, paramValue: String?): String
+            = "${baseUrl}${methodName}" + if (paramValue != null) "?value=${paramValue}" else ""
+}
+
+interface AbstractSuspendClient: AbstractClient {
+    suspend fun suspendClientCall(methodName: MethodName, paramValue: String? = null): String
+}
+interface AbstractReactiveClient: AbstractClient {
+    fun webClientCall(methodName: MethodName, paramValue: String? = null): Mono<String?>?
+}
+
 @Component
-class ExternalServicesCaller(val restTemplate: RestTemplate,
-                             val webClient: WebClient) {
-    private val logger: Logger = LoggerFactory.getLogger("external")
-    private val baseUrl = "http://localhost:8087/"
-
-    init {
-        FuelManager.instance.timeoutInMillisecond = 50
-        FuelManager.instance.timeoutReadInMillisecond = 80
-    }
-
-    fun restTemplateCall(methodName: MethodName, paramValue: String? = null): String {
+class RestTemplateClient(val restTemplate: RestTemplate): AbstractSuspendClient {
+    override suspend fun suspendClientCall(methodName: MethodName, paramValue: String?): String {
         val url = getUrl(methodName.name, paramValue)
         logger.debug("restTemplateCall to ${url}")
 
@@ -32,8 +43,11 @@ class ExternalServicesCaller(val restTemplate: RestTemplate,
             ""
         }
     }
+}
 
-    suspend fun fuelClientCall(methodName: MethodName, paramValue: String? = null): String {
+@Component
+class FuelClient: AbstractSuspendClient {
+    override suspend fun suspendClientCall(methodName: MethodName, paramValue: String?): String {
         val url = getUrl(methodName.name, paramValue)
         logger.debug("fuelClientCall to ${url}")
 
@@ -42,12 +56,15 @@ class ExternalServicesCaller(val restTemplate: RestTemplate,
         return result.fold(
                 { success -> success },
                 { error -> logger.info("Response error for $url: ${error.exception}")
-                           ""}
+                    ""}
         )
     }
+}
 
-    fun webClientCall(methodName: MethodName,
-                      paramValue: String? = null): Mono<String?>? {
+@Component
+class ReactiveWebClient(val webClient: WebClient): AbstractReactiveClient {
+    override fun webClientCall(methodName: MethodName,
+                               paramValue: String?): Mono<String?>? {
         val url = getUrl(methodName.name, paramValue)
         logger.debug("webClientCall to ${url}")
         return webClient.get()
@@ -58,12 +75,4 @@ class ExternalServicesCaller(val restTemplate: RestTemplate,
                 .doOnError { logger.info("Response error for $methodName and $paramValue is $it") }
                 .onErrorReturn("")
     }
-
-    private fun getUrl(methodName: String, paramValue: String?): String
-            = "${baseUrl}${methodName}" + if (paramValue != null) "?value=${paramValue}" else ""
-
-}
-
-enum class MethodName {
-    ingredients, heat, dough, tray, icing
 }
